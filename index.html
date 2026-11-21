@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#FFF5F8">
+  <title>Home | Hedy &amp; Batty</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app"></div>
+
+  <script src="utils.js"></script>
+  <script src="art.js"></script>
+  <script src="app.js"></script>
+  <script>
+    const LEVELS = [
+      { name: 'Open Redirect',       blurb: 'Batty swaps the sign.' },
+      { name: 'ReDoS',               blurb: 'Batty jams the guard.' },
+      { name: 'Prototype Pollution', blurb: 'Batty crowns every cat.' }
+    ];
+
+    const levelCards = LEVELS.map((level, i) => {
+      const n = i + 1;
+      const locked = isLocked(n);
+      const done = P['l' + n];
+      const cls = locked ? ' lk' : done ? ' dn' : '';
+      const icon = locked ? '🔒' : done ? '✓' : n;
+
+      return `
+        <a class="lv${cls}" href="${link('lab' + n + '.html')}">
+          <span class="n">${icon}</span>
+          <span><b>${level.name}</b>${level.blurb}</span>
+        </a>`;
+    }).join('');
+
+    $('#app').innerHTML = nav('Home') + `
+      <main>
+
+        <section id="splash" class="splash">
+          <div>${heroArt()}</div>
+          <h1>Hedy &amp; Batty</h1>
+          <p>Batty breaks in. Hedy fixes it.</p>
+          <button id="st" class="b p">Start</button>
+        </section>
+
+        <section id="map" hidden>
+          <h1>Pick a level</h1>
+          <p>Beat each lab to unlock the next.</p>
+          <div class="lvls">
+            ${levelCards}
+          </div>
+          <p><button id="rs" class="b">Start over</button></p>
+        </section>
+
+        <section id="win" class="win" hidden>
+          <div class="art">${winArt()}</div>
+          <h1>You did it!</h1>
+          <p>All 3 labs are secure. Hedy and Batty are a team now.</p>
+          <div class="btns" style="justify-content:center">
+            <button id="ag" class="b">Play again</button>
+          </div>
+        </section>
+
+      </main>`;
+
+    const view = name => {
+      ['splash', 'map', 'win'].forEach(id => {
+        $('#' + id).hidden = id !== name;
+      });
+    };
+
+    $('#st').onclick = () => view('map');
+
+    $('#rs').onclick = $('#ag').onclick = () => {
+      P = {};
+      save();
+      location.href = 'index.html';
+    };
+
+    if (location.hash === '#win' && P.l3) {
+      view('win');
+
+      const colours = ['#FF4081', '#FFB6C1', '#D6336C', '#16a34a', '#fbbf24'];
+
+      for (let i = 0; i < 40; i++) {
+        const piece = document.createElement('i');
+        piece.className = 'cf';
+        piece.style.cssText =
+          `left:${Math.random() * 100}%;` +
+          `animation-delay:${Math.random() * 3}s;` +
+          `background:${colours[i % 5]}`;
+        document.body.append(piece);
+      }
+    } else if (location.hash === '#map') {
+      view('map');
+    }
+  </script>
+</body>
+</html>

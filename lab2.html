@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#FFF5F8">
+  <title>Lab 2 | Hedy &amp; Batty</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app"></div>
+
+  <script src="utils.js"></script>
+  <script src="art.js"></script>
+  <script src="app.js"></script>
+  <script>
+    runLab({
+      n: 2,
+      title: 'ReDoS',
+      tag: 'OWASP A04 · CWE-1333',
+
+      intro: [
+        ['b', 'Your email check has a repeat inside a repeat. I love those.', 'evil'],
+        ['h', 'That is ReDoS: one bad regex that chokes on a long input. OWASP A04, CWE-1333.', 'scared'],
+        ['b', 'Give me 30 letters and a "!" and watch the guard sweat.', 'evil'],
+        ['h', 'Open the code.', 'smug']
+      ],
+
+      after: [
+        ['h', 'The guard froze on one tiny input!', 'scared'],
+        ['b', 'In 2019 one bad regex rule took down a big part of Cloudflare.', 'evil'],
+        ['h', 'So we use a simple, bounded pattern.', 'smug']
+      ],
+
+      moves: [
+        ['Normal email', 'cat@example.com'],
+        ['30 a + !', 'a'.repeat(30) + '!'],
+        ['40 a + !', 'a'.repeat(40) + '!']
+      ],
+
+      sim: (v, f) => {
+
+        if (/^[A-Za-z0-9._%+-]{1,64}@example\.com$/.test(v)) {
+          return { k: 'n', msg: 'Accepted fast. Little work.' };
+        }
+
+        if (f) {
+          return { k: 'x', msg: 'Rejected right away. No heavy backtracking.' };
+        }
+
+        if (/^a{20,}!$/.test(v)) {
+          return {
+            k: 'b',
+            rows: [
+              'input length: ' + v.length,
+              'work needed: doubles with every letter',
+              'status: guard overloaded (simulated)'
+            ]
+          };
+        }
+
+        return { k: 'n', msg: 'This one is fine. Try a long one.' };
+      },
+
+      sc: r => {
+        const m = look(r);
+        const msg = r.k === 'b' ? 'Guard overloaded!'
+                  : r.k === 'x' ? 'Rejected safely'
+                  : 'Send an email';
+
+        const letters = r.k === 'b'
+          ? mail(232, 70, -10) + mail(246, 86, 8) + mail(224, 98, -4) + mail(252, 62, 14) + mail(238, 108, 6)
+          : r.k === 'x'
+            ? ''
+            : mail(236, 84, -8);
+
+        return say(msg)
+          + guard(r.k)
+          + letters
+          + (r.k === 'x' ? shield(108) : '')
+          + bat(292, 46, 1, m.bat)
+          + cat(60, 130, 1, m.cat);
+      },
+
+      code: [
+        String.raw`const emailRe = /^(\w+)+@example\.com$/;`,
+        'function isValidEmail(email) {',
+        '  if (typeof email !== "string") return false;',
+        '  if (email.length > 256) return false;',
+        '  return emailRe.test(email);',
+        '}',
+        'function handleSignup(input) {',
+        '  return isValidEmail(input.email);',
+        '}'
+      ],
+      hl: 0,
+      why: String.raw`(\w+)+ is a repeat inside a repeat.`,
+
+      fix: [
+        [String.raw`const emailRe = /^[A-Za-z0-9._%+-]{1,64}@example\.com$/;`, 1],
+        [String.raw`const emailRe = /^((\w)+)+@example\.com$/;`, 0,
+          'Still a repeat inside a repeat.'],
+        [String.raw`const emailRe = /^(\w+)*@example\.com$/;`, 0,
+          'Same trap with a different symbol.']
+      ]
+    });
+  </script>
+</body>
+</html>

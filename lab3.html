@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#FFF5F8">
+  <title>Lab 3 | Hedy &amp; Batty</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app"></div>
+
+  <script src="utils.js"></script>
+  <script src="art.js"></script>
+  <script src="app.js"></script>
+  <script>
+    runLab({
+      n: 3,
+      title: 'Prototype Pollution',
+      tag: 'OWASP A08 · CWE-1321',
+
+      intro: [
+        ['b', 'Your merge copies every key I send. Even the secret ones.', 'evil'],
+        ['h', 'Prototype pollution: a key like __proto__ changes what every object inherits. OWASP A08, CWE-1321.', 'scared'],
+        ['b', 'Watch me give every cat an admin crown.', 'evil'],
+        ['h', 'Show me the code.', 'smug']
+      ],
+
+      after: [
+        ['h', 'Everyone got the crown, not just me!', 'scared'],
+        ['b', 'Popular libraries like lodash had this bug (CVE-2019-10744).', 'evil'],
+        ['h', 'So we merge only the keys we expect, as text.', 'smug']
+      ],
+
+      moves: [
+        ['Normal profile', '{"nickname":"Mimi"}'],
+        ['__proto__', '{"__proto__":{"isAdmin":true}}'],
+        ['constructor', '{"constructor":{"prototype":{"isAdmin":true}}}']
+      ],
+
+      sim: (v, f) => {
+        let data;
+        try {
+          data = JSON.parse(v);
+        } catch (e) {
+          return { k: 'n', msg: 'Not valid JSON.' };
+        }
+
+        const ok = Object.keys(data).every(key =>
+          ['nickname', 'theme'].includes(key) && typeof data[key] === 'string'
+        );
+
+        if (f) {
+          return ok
+            ? { k: 'n', msg: 'Saved for this cat only.' }
+            : { k: 'x', msg: 'Unknown keys and objects are skipped. Shared objects stay clean.' };
+        }
+
+        if (!ok) {
+          return {
+            k: 'b',
+            rows: [
+              'keys: ' + Object.keys(data).join(', '),
+              'shared prototype changed: yes (simulated)',
+              'every object now has isAdmin: true'
+            ]
+          };
+        }
+
+        return { k: 'n', msg: 'Profile saved.' };
+      },
+
+      sc: r => {
+        const m = look(r);
+        const hit = r.k === 'b';
+        const msg = hit ? 'Crown for everyone!'
+                  : r.k === 'x' ? 'Bad keys skipped'
+                  : r.k === 'n' ? 'Just a note'
+                  : 'Send a profile';
+
+        const cats = [70, 170, 270].map(x => `
+          ${cat(x, 130, .8, m.cat, hit)}
+          <rect x="${x - 20}" y="139" width="40" height="14" rx="7" fill="${hit ? C.H : C.T}"/>
+          <text x="${x}" y="149.5" text-anchor="middle" font-size="9" font-weight="700" fill="${C.B}">${hit ? 'admin' : 'guest'}</text>
+        `).join('');
+
+        return say(msg)
+          + (hit ? chain(226, 66, 70, 86) + chain(226, 66, 170, 86) + chain(226, 66, 270, 86) : '')
+          + flask(226, 44, r.k)
+          + (r.k === 'x' ? ban(226, 44, 24) : '')
+          + bat(300, 30, .9, m.bat)
+          + cats;
+      },
+
+      code: [
+        'const allowed = new Set(["nickname", "theme"]);',
+        'function merge(target, input) {',
+        '  for (const key in input) {',
+        '    const value = input[key];',
+        '    if (typeof value === "object") {',
+        '      merge(target[key] ??= {}, value);',
+        '    } else {',
+        '      target[key] = value;',
+        '    }',
+        '  }',
+        '  return target;',
+        '}',
+        'merge(profile, requestBody);'
+      ],
+      hl: 2,
+      why: 'it visits every key, including __proto__ and constructor.',
+
+      fix: [
+        ['  for (const key of Object.keys(input).filter(k => allowed.has(k) && typeof input[k] === "string")) {', 1],
+        ['  for (const key of Object.keys(input)) {', 0,
+          'JSON.parse makes __proto__ a normal key, so it is still visited.'],
+        ['  for (const key of Object.keys(input).filter(k => k !== "__proto__")) {', 0,
+          'constructor.prototype still gets through. Use an allowlist.']
+      ]
+    });
+  </script>
+</body>
+</html>

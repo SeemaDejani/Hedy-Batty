@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#FFF5F8">
+  <title>Lab 1 | Hedy &amp; Batty</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app"></div>
+
+  <script src="utils.js"></script>
+  <script src="art.js"></script>
+  <script src="app.js"></script>
+  <script>
+    const base = 'https://hedy.example';
+
+    runLab({
+      n: 1,
+      title: 'Open Redirect',
+      tag: 'OWASP A01 · CWE-601',
+
+      intro: [
+        ['b', 'Hehe. The login page sends people wherever ?next= says.', 'evil'],
+        ['h', 'That is an open redirect. A real link can send us to a fake site. OWASP A01, CWE-601.', 'scared'],
+        ['b', 'Want to watch me use it?', 'evil'],
+        ['h', 'Show me the code first.', 'smug']
+      ],
+
+      after: [
+        ['h', 'I followed the real link and landed on the fake site!', 'scared'],
+        ['b', 'Because redirect(next) trusts any URL. Phishing campaigns abuse trusted sites this way.', 'evil'],
+        ['h', 'Then we only allow routes we know.', 'smug']
+      ],
+
+      moves: [
+        ['Normal road', '/profile'],
+        ['Other site', 'https://evil.example/login'],
+        ['Sneaky //', '//evil.example/login']
+      ],
+
+      sim: (v, f) => {
+        let u;
+        try {
+          u = new URL(v, base);
+        } catch (e) {
+          return { k: 'n', msg: 'Not a valid destination.' };
+        }
+
+        if (f) {
+          const approved = ['/home', '/profile'];
+          if (u.origin !== base || !approved.includes(u.pathname)) {
+            return { k: 'x', msg: 'Not on the approved list. Hedy goes to /home.' };
+          }
+          return { k: 'n', msg: 'Approved route ' + u.pathname + '. Normal links still work.' };
+        }
+
+        if (u.origin === base) {
+          return { k: 'n', msg: 'Hedy walks to ' + u.pathname + '. Same site.' };
+        }
+
+        return {
+          k: 'b',
+          rows: [
+            'asked for: ' + u.href,
+            'final host: ' + u.host,
+            'left trusted site: yes'
+          ]
+        };
+      },
+
+      sc: r => {
+        const m = look(r);
+        const hit = r.k === 'b';
+        const signText = hit ? 'evil.example' : r.k === 'x' ? 'BLOCKED' : '/profile';
+
+        return island()
+          + house()
+          + sign(signText)
+          + (hit ? redirectArrow() : '')
+          + (r.k === 'x' ? shield(165) : '')
+          + bat(hit ? 100 : 290, hit ? 36 : 40, 1, m.bat)
+          + cat(hit ? 50 : r.k === 'n' ? 232 : 100, 130, 1, m.cat);
+      },
+
+      code: [
+        'const BASE_URL = "https://hedy.example";',
+        'const allowed = new Set(["/home", "/profile"]);',
+        'function afterLogin(search) {',
+        '  const params = new URLSearchParams(search);',
+        '  const next = params.get("next") || "/home";',
+        '  const url = new URL(next, BASE_URL);',
+        '  if (!isLoggedIn()) return showLogin();',
+        '  return redirect(next);',
+        '}',
+        'afterLogin(location.search);'
+      ],
+      hl: 7,
+      why: 'next comes from the link and is never checked.',
+
+      fix: [
+        ['  return redirect(url.origin === BASE_URL && allowed.has(url.pathname) ? url.pathname : "/home");', 1],
+        ['  return redirect(next.startsWith("/") ? next : "/home");', 0,
+          '//evil.example starts with "/" and slips through.'],
+        ['  return redirect(url.hostname.includes("hedy") ? next : "/home");', 0,
+          'hedy.example.evil.test contains "hedy". Check the exact origin.']
+      ]
+    });
+  </script>
+</body>
+</html>
