@@ -14,22 +14,44 @@
   <script src="art.js"></script>
   <script src="app.js"></script>
   <script>
+    const isObj = x => x !== null && typeof x === 'object';
+
+    // Follows the vulnerable merge() on paper. It never touches the real Object.prototype.
+    // Returns what would be written onto the shared prototype, or null if nothing reaches it.
+    const pollution = obj => {
+      for (const key of Object.keys(obj)) {
+        const value = obj[key];
+        if (!isObj(value)) continue;
+
+        if (key === '__proto__') {
+          return { via: '__proto__', written: value };
+        }
+        if (key === 'constructor' && isObj(value.prototype)) {
+          return { via: 'constructor.prototype', written: value.prototype };
+        }
+
+        const deeper = pollution(value);
+        if (deeper) return deeper;
+      }
+      return null;
+    };
+
     runLab({
       n: 3,
       title: 'Prototype Pollution',
       tag: 'OWASP A08 · CWE-1321',
 
       intro: [
-        ['b', 'Your merge copies every key I send. Even the secret ones.', 'evil'],
-        ['h', 'Prototype pollution: a key like __proto__ changes what every object inherits. OWASP A08, CWE-1321.', 'scared'],
-        ['b', 'Watch me give every cat an admin crown.', 'evil'],
+        ['b', 'Your merge copies every key I send. Even the sneaky ones.', 'evil'],
+        ['h', 'That is prototype pollution: a key like __proto__ lets the input write into the shared object that all objects inherit from. OWASP A08, CWE-1321.', 'scared'],
+        ['b', 'Watch me give every new cat an admin crown.', 'evil'],
         ['h', 'Show me the code.', 'smug']
       ],
 
       after: [
-        ['h', 'Everyone got the crown, not just me!', 'scared'],
-        ['b', 'Popular libraries like lodash had this bug (CVE-2019-10744).', 'evil'],
-        ['h', 'So we merge only the keys we expect, as text.', 'smug']
+        ['h', 'Even cats that sent nothing got the crown!', 'scared'],
+        ['b', 'Because __proto__ pointed at the shared prototype, so every plain object now inherits isAdmin. Libraries like lodash had this bug (CVE-2019-10744).', 'evil'],
+        ['h', 'Then we copy only the keys we expect, and only as text.', 'smug']
       ],
 
       moves: [
@@ -46,23 +68,29 @@
           return { k: 'n', msg: 'Not valid JSON.' };
         }
 
-        const ok = Object.keys(data).every(key =>
-          ['nickname', 'theme'].includes(key) && typeof data[key] === 'string'
-        );
-
-        if (f) {
-          return ok
-            ? { k: 'n', msg: 'Saved for this cat only.' }
-            : { k: 'x', msg: 'Unknown keys and objects are skipped. Shared objects stay clean.' };
+        if (!isObj(data) || Array.isArray(data)) {
+          return { k: 'n', msg: 'Send a JSON object, like {"nickname":"Mimi"}.' };
         }
 
-        if (!ok) {
+        if (f) {
+          const ok = Object.keys(data).every(key =>
+            ['nickname', 'theme'].includes(key) && typeof data[key] === 'string'
+          );
+          return ok
+            ? { k: 'n', msg: 'Saved for this cat only.' }
+            : { k: 'x', msg: 'Unexpected keys and objects are skipped. The shared prototype stays clean.' };
+        }
+
+        const hit = pollution(data);
+        const keys = hit ? Object.keys(hit.written) : [];
+
+        if (keys.length) {
           return {
             k: 'b',
             rows: [
-              'keys: ' + Object.keys(data).join(', '),
-              'shared prototype changed: yes (simulated)',
-              'every object now has isAdmin: true'
+              'path used: ' + hit.via,
+              'written onto the shared prototype: ' + keys.map(k => k + ' = ' + JSON.stringify(hit.written[k])).join(', '),
+              'a brand-new {} now inherits these keys (simulated)'
             ]
           };
         }
@@ -75,7 +103,7 @@
         const hit = r.k === 'b';
         const msg = hit ? 'Crown for everyone!'
                   : r.k === 'x' ? 'Bad keys skipped'
-                  : r.k === 'n' ? 'Just a note'
+                  : r.k === 'n' ? 'Profile saved'
                   : 'Send a profile';
 
         const cats = [70, 170, 270].map(x => `
@@ -93,7 +121,7 @@
       },
 
       code: [
-        'const allowed = new Set(["nickname", "theme"]);',
+        'const profile = { nickname: "Mimi" };',
         'function merge(target, input) {',
         '  for (const key in input) {',
         '    const value = input[key];',
@@ -105,17 +133,20 @@
         '  }',
         '  return target;',
         '}',
-        'merge(profile, requestBody);'
+        'const requestBody = JSON.parse(rawBody);',
+        'merge(profile, requestBody);',
+        'const guest = {};',
+        'if (guest.isAdmin) grantCrown();'
       ],
       hl: 2,
-      why: 'it visits every key, including __proto__ and constructor.',
+      why: 'this loop copies every key from the input, including __proto__ and constructor.',
 
       fix: [
-        ['  for (const key of Object.keys(input).filter(k => allowed.has(k) && typeof input[k] === "string")) {', 1],
+        ['  for (const key of ["nickname", "theme"].filter(k => typeof input[k] === "string")) {', 1],
         ['  for (const key of Object.keys(input)) {', 0,
-          'JSON.parse makes __proto__ a normal key, so it is still visited.'],
+          'JSON.parse makes __proto__ a normal own key, so Object.keys still lists it.'],
         ['  for (const key of Object.keys(input).filter(k => k !== "__proto__")) {', 0,
-          'constructor.prototype still gets through. Use an allowlist.']
+          'constructor.prototype still gets through. Only an allowlist is safe.']
       ]
     });
   </script>
